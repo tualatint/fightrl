@@ -1,0 +1,14 @@
+runs/
+states/*.state
+states/*.srm
+roms/
+cores/*.so
+cores/*.zip
+cores/*/*.fs
+logs/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+*.srm
+*.mp4

@@ -1,0 +1,99 @@
+{
+  "id": "samsho2_neogeo",
+  "title": "Samurai Shodown II / Shin Samurai Spirits (Neo Geo / FBNeo)",
+  "backend": "libretro",
+  "core": "fbneo_libretro.so",
+  "rom": "roms/samsho2.zip",
+  "system_dir": "cores",
+  "start_state": "states/samsho2_neogeo.state",
+  "screen": {
+    "width": 320,
+    "height": 224
+  },
+  "frameskip": 3,
+  "action_mode": "hybrid",
+  "state_source": "auto",
+  "max_episode_frames": 6000,
+  "button_map": {
+    "UP": 4,
+    "DOWN": 5,
+    "LEFT": 6,
+    "RIGHT": 7,
+    "START": 3,
+    "SELECT": 2,
+    "A": 0,
+    "B": 8,
+    "C": 1,
+    "D": 9
+  },
+  "action_buttons": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "special_macros": [
+    {
+      "name": "qcf_A",
+      "steps": [
+        {"dir": "down", "frames": 2},
+        {"dir": "down_fwd", "frames": 2},
+        {"dir": "fwd", "frames": 2},
+        {"dir": "fwd", "buttons": ["A"], "frames": 6},
+        {"dir": "neutral", "frames": 6}
+      ]
+    },
+    {
+      "name": "qcf_B",
+      "steps": [
+        {"dir": "down", "frames": 2},
+        {"dir": "down_fwd", "frames": 2},
+        {"dir": "fwd", "frames": 2},
+        {"dir": "fwd", "buttons": ["B"], "frames": 6},
+        {"dir": "neutral", "frames": 6}
+      ]
+    },
+    {
+      "name": "dp_A",
+      "steps": [
+        {"dir": "fwd", "frames": 2},
+        {"dir": "down", "frames": 2},
+        {"dir": "down_fwd", "frames": 2},
+        {"dir": "down_fwd", "buttons": ["A"], "frames": 6},
+        {"dir": "neutral", "frames": 8}
+      ]
+    },
+    {
+      "name": "qcb_A",
+      "steps": [
+        {"dir": "down", "frames": 2},
+        {"dir": "down_back", "frames": 2},
+        {"dir": "back", "frames": 2},
+        {"dir": "back", "buttons": ["A"], "frames": 6},
+        {"dir": "neutral", "frames": 8}
+      ]
+    }
+  ],
+  "core_options": {
+    "fbneo-neogeo-mode": "AES",
+    "fbneo-allow-patched-romsets": "enabled"
+  },
+  "hud": {
+    "p1_bar": [
+      16,
+      18,
+      128,
+      12
+    ],
+    "p2_bar": [
+      176,
+      18,
+      128,
+      12
+    ],
+    "hue": [
+      95,
+      150
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fightrl"
+version = "0.1.0"
+description = "Gymnasium environments and training pipeline for 2D fighting games (Street Fighter II, Samurai Shodown II)"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "gymnasium>=0.29",
+    "stable-baselines3>=2.4",
+    "torch>=2.1",
+    "imageio>=2.31",
+    "imageio-ffmpeg>=0.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+display = ["pygame>=2.1"]
+
+[project.scripts]
+fightrl-train = "fightrl.train:main"
+fightrl-eval = "fightrl.evaluate:main"
+fightrl-ramscan = "fightrl.ramscan:main"
+fightrl-capture = "fightrl.capture:main"
+
+[tool.setuptools.packages.find]
+include = ["fightrl*"]

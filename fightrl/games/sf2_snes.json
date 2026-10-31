@@ -1,0 +1,153 @@
+{
+  "id": "sf2_snes",
+  "title": "Street Fighter II Turbo (SNES / snes9x)",
+  "backend": "libretro",
+  "core": "snes9x_libretro.so",
+  "rom": "roms/sf2turbo.sfc",
+  "system_dir": "cores",
+  "start_state": "states/sf2_snes.state",
+  "screen": {
+    "width": 256,
+    "height": 224
+  },
+  "frameskip": 3,
+  "action_mode": "hybrid",
+  "state_source": "auto",
+  "max_episode_frames": 6000,
+  "button_map": {
+    "UP": 4,
+    "DOWN": 5,
+    "LEFT": 6,
+    "RIGHT": 7,
+    "START": 3,
+    "SELECT": 2,
+    "LP": 1,
+    "MP": 9,
+    "HP": 10,
+    "LK": 0,
+    "MK": 8,
+    "HK": 11
+  },
+  "action_buttons": [
+    "LP",
+    "MP",
+    "HP",
+    "LK",
+    "MK",
+    "HK"
+  ],
+  "special_macros": [
+    {
+      "name": "hadoken_punch",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "LP"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "hadoken_kick",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "LK"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "tatsumaki",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "buttons": [
+            "LK"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "shoryuken",
+      "steps": [
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "buttons": [
+            "HP"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "id": "sf2_genesis",
+  "title": "Street Fighter II' Special Champion Edition (Genesis / genesis_plus_gx)",
+  "backend": "libretro",
+  "core": "genesis_plus_gx_libretro.so",
+  "rom": "roms/sf2sce.md",
+  "system_dir": "cores",
+  "start_state": "states/sf2_genesis.state",
+  "screen": {
+    "width": 320,
+    "height": 224
+  },
+  "frameskip": 3,
+  "action_mode": "hybrid",
+  "state_source": "auto",
+  "max_episode_frames": 6000,
+  "button_map": {
+    "UP": 4,
+    "DOWN": 5,
+    "LEFT": 6,
+    "RIGHT": 7,
+    "START": 3,
+    "SELECT": 2,
+    "LP": 0,
+    "MP": 8,
+    "HP": 1,
+    "LK": 9,
+    "MK": 10,
+    "HK": 11
+  },
+  "action_buttons": [
+    "LP",
+    "MP",
+    "HP",
+    "LK",
+    "MK",
+    "HK"
+  ],
+  "special_macros": [
+    {
+      "name": "hadoken_punch",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "LP"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "tatsumaki",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "buttons": [
+            "LK"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    }
+  ]
+}

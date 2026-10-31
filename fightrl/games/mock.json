@@ -1,0 +1,34 @@
+{
+  "id": "mock",
+  "title": "Mock Fighter (built-in reference game, no ROM required)",
+  "backend": "mock",
+  "action_buttons": ["LP", "MP", "HP", "LK", "MK", "HK"],
+  "frameskip": 4,
+  "state_source": "ram",
+  "screen": {"width": 320, "height": 224},
+  "max_episode_frames": 5940,
+  "reward": {
+    "deal": 1.0,
+    "take": 1.0,
+    "win": 1.0,
+    "loss": 1.0,
+    "time": 0.002,
+    "lead": 0.25,
+    "approach": 0.6
+  },
+  "ram_map": {
+    "p1_hp": {"addr": 2560, "width": 1},
+    "p2_hp": {"addr": 2561, "width": 1},
+    "timer": {"addr": 2562, "width": 1},
+    "p1_x": {"addr": 2576, "width": 2},
+    "p2_x": {"addr": 2578, "width": 2},
+    "p1_hp_max": 176,
+    "p2_hp_max": 176,
+    "timer_max": 99,
+    "stage_width": 480
+  },
+  "mock": {
+    "health": 176,
+    "round_seconds": 99
+  }
+}

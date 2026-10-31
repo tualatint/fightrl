@@ -1,0 +1,25 @@
+{
+  "game": "samsho2_neogeo",
+  "core": {
+    "name": "fbneo_libretro.so",
+    "library_name": "FinalBurn Neo",
+    "library_version": "v1.0.0.03  ec7a6271",
+    "sha256": "745c0caa95d1d3537e8bdff17dc4cd6a692fa845d68d9fa2cec8633600a064d2"
+  },
+  "rom": {
+    "path": "roms/samsho2.zip",
+    "sha256": "377eb101a341188220b69e916a60fbf009a0e3fbcd1cc1b4f36bbf2f7edd1067"
+  },
+  "state": {
+    "path": "states/samsho2_neogeo.state",
+    "sha256": "8ebd24089b7b0e7ce78eab2d325996fa264baee20b3251ddcb4d36d87cf4592e",
+    "captured_at": "2026-10-31T00:20:00+08:00",
+    "screen": {"width": 320, "height": 224},
+    "description": "2P VS, Haohmaru vs Haohmaru, timer at 99, CHALLENGER label on P2; round start."
+  },
+  "core_options": {
+    "fbneo-neogeo-mode": "AES",
+    "fbneo-allow-patched-romsets": "enabled"
+  },
+  "note": "Save states are FBNeo-version specific. Re-record with `python -m fightrl.capture --game samsho2_neogeo` after changing the core or ROM, then update every checksum above."
+}
