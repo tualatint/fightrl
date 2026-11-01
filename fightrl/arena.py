@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import threading
 import time
@@ -83,7 +84,8 @@ class StartRequest(BaseModel):
 class Session:
     """Owns one FightEnv, two frozen policies and the latest JPEG frame."""
 
-    def __init__(self, game: str, path_a: str, path_b: str, seed: int):
+    def __init__(self, game: str, path_a: str, path_b: str, seed: int, session_id: int = 0):
+        self.sid = session_id
         self.game = game
         self.paths = {"a": path_a, "b": path_b}
         self.labels = {"a": Path(path_a).stem, "b": Path(path_b).stem}
@@ -95,6 +97,10 @@ class Session:
         self.swapped = False
         self.rounds = {"a": 0, "b": 0}
         self.round_no = 1
+        rng_seed = time.time_ns() & 0xFFFFFFFF
+        random.seed(rng_seed)
+        np.random.seed(rng_seed)
+        torch.manual_seed(rng_seed)
         self.frame_count = 0
         self.jpeg: bytes = b""
         self.jpeg_lock = threading.Lock()
@@ -148,7 +154,7 @@ class Session:
             obs, _ = self._start_match()
             while not self.stop.is_set():
                 model = self.models[self.status["p1"]]
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=False)
                 obs, _, terminated, truncated, info = self.env.step(action)
                 self.status.update({
                     "hp1": float(info.get("p1_frac", 0.0)),
@@ -162,7 +168,7 @@ class Session:
                         else "ko" if info.get("round_over") else "hud_reset"
                     )
                     print(
-                        f"[arena] end reason={reason} winner={winner} "
+                        f"[arena] end session={self.sid} reason={reason} winner={winner} "
                         f"frames={info.get('frames')} hp1={info.get('p1_frac'):.3f} "
                         f"hp2={info.get('p2_frac'):.3f}",
                         flush=True,
@@ -224,7 +230,8 @@ def start(request: StartRequest) -> dict:
         if isinstance(old, Session):
             _shutdown(old)
         STATE["id"] = int(STATE["id"]) + 1
-        session = Session("samsho2_neogeo", request.p1, request.p2, request.seed)
+        session = Session("samsho2_neogeo", request.p1, request.p2, request.seed,
+                          int(STATE["id"]))
         STATE["session"] = session
         session.start()
         return {"session": STATE["id"], "labels": session.labels}
