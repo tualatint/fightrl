@@ -41,8 +41,9 @@ console would.
 ## Install
 
 ```bash
-pip install -e .            # numpy, gymnasium, stable-baselines3, torch, imageio
-pip install -e ".[dev]"     # + pytest
+pip install -e .                     # numpy, gymnasium, stable-baselines3, torch, imageio
+pip install -e ".[dev]"              # + pytest
+pip install -e ".[arena]"            # + fastapi/uvicorn, for the web arena
 pip install opencv-python-headless   # optional, ~2x faster frame preprocessing
 ```
 
@@ -75,7 +76,17 @@ python -m fightrl.train --list-games
 bash scripts/fetch_cores.sh          # snes9x, genesis_plus_gx, fbneo -> ./cores
 ```
 
-### 2. Put your ROMs in place
+### 2. One command, or do it by hand
+
+```bash
+bash scripts/setup.sh /path/to/samsho2.zip
+```
+
+It downloads the FBNeo core if missing, installs your ROM at `roms/samsho2.zip`,
+checks the start state, then runs one episode with the bundled weights
+(`weights/samsho2_ppo_best.zip`) so you can see it play immediately.
+
+By hand, the files go here:
 
 ```
 roms/sf2turbo.sfc           # Street Fighter II Turbo (SNES)
@@ -156,6 +167,22 @@ python -m fightrl.evaluate --game sf2_snes --model runs/sf2/best.zip \
     --opponent aggressive --episodes 20 --video runs/sf2/replay.mp4
 ```
 
+### 7. Bundled weights
+
+`weights/samsho2_ppo_best.zip` is a trained Samurai Shodown II policy and is
+committed to this repo (15 MB). It needs the ROM and a start state, nothing
+else:
+
+```bash
+python -m fightrl.evaluate --game samsho2_neogeo --model weights/samsho2_ppo_best.zip \
+    --opponent aggressive --episodes 10 --video replay.mp4
+python -m fightrl.arena --game samsho2_neogeo --port 8767   # pick it in the UI
+```
+
+It was trained for 3.86M steps and beats the scripted `aggressive` bot in 4 of
+5 episodes. The archive records its own action and observation spaces, so the
+arena refuses it if you change the config's action space underneath it.
+
 ### Samurai Shodown II notes (FBNeo)
 
 `fightrl/games/samsho2_neogeo.json` runs the arcade romset in AES mode:
@@ -166,10 +193,12 @@ cores/neogeo.zip        # Neo Geo BIOS, required by FBNeo (not bundled)
 states/samsho2_neogeo.state
 ```
 
-The shipped start state is a **2P VS** match (Haohmaru vs Haohmaru, timer at
-99, "CHALLENGER" label on P2) captured as the round begins. To record your own,
-boot the game, pick 2P VS and a character, and press **S** once both bars are
-full: `python -m fightrl.capture --game samsho2_neogeo`.
+The reference start state is a **2P VS** match (Haohmaru vs Haohmaru, timer at
+99, "CHALLENGER" label on P2) captured as the round begins. Save states contain
+game data and are gitignored, so record your own: boot the game, pick 2P VS and
+a character, and press **S** once both bars are full:
+`python -m fightrl.capture --game samsho2_neogeo`. `scripts/setup.sh` stops and
+prints this instruction if the state is missing.
 
 State comes from the HUD bars (`state_source: "auto"` with no RAM map): a
 `ramscan` run did not find addresses that track both health bars on this

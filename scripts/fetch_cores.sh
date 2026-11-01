@@ -4,10 +4,11 @@
 set -euo pipefail
 
 DIR="${1:-cores}"
+CORES="${2:-snes9x genesis_plus_gx fbneo}"
 BASE="https://buildbot.libretro.com/nightly/linux/x86_64/latest"
 mkdir -p "$DIR"
 
-for core in snes9x genesis_plus_gx fbneo; do
+for core in $CORES; do
   if [ -f "$DIR/${core}_libretro.so" ]; then
     echo "already present: ${core}_libretro.so"
     continue
