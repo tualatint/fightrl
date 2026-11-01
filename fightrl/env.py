@@ -258,6 +258,7 @@ class FightEnv(gym.Env):
             )
         self._prev_state = self.state
         self._damaged_streak = 0
+        self._last_damaged_state = None
         self._reset_pixels()
         obs = self._observe()
         info = self._info()
@@ -302,7 +303,10 @@ class FightEnv(gym.Env):
                 # The bars are full again after having been damaged: the round
                 # ended (usually on time-out) and the next one began.  Vision
                 # readers have no timer, so this is the only visible boundary.
-                self._winner = self._winner_by_health(self._prev_state)
+                # Score it from the last damaged reading: the current state is
+                # already the refilled bars, which would count as a draw.
+                last = self._last_damaged_state or self._prev_state
+                self._winner = self._winner_by_health(last)
                 reward += self._result_reward(self._winner)
                 reward -= self.config.reward.get("time", 0.0) * (
                     frames_run / max(self.backend.fps, 1.0)
@@ -311,6 +315,8 @@ class FightEnv(gym.Env):
                 terminated = True
                 break
             self._damaged_streak = 0 if both_full else self._damaged_streak + 1
+            if not both_full:
+                self._last_damaged_state = self.state
             # `_reward` runs once per emulated frame; charge one frame of the
             # time penalty, not the cumulative frames_run of this step.
             r, dealt, taken = self._reward(self._prev_state, self.state, 1)

@@ -263,7 +263,7 @@ def _bar_mask(frame: np.ndarray, hue_range: tuple[float, float] = (35.0, 150.0))
 def _bar_fill(
     frame: np.ndarray, roi: tuple[int, int, int, int], hue_range: tuple[float, float]
 ) -> float:
-    """Fill fraction of one bar, computed only inside its ROI.
+    """Green fraction of one bar, computed only inside its ROI.
 
     Same result as ``_fill(_bar_mask(frame), roi)`` but touches ~3k pixels
     instead of all 71k, which dominates the per-frame cost of vision stepping.
@@ -273,18 +273,46 @@ def _bar_fill(
     if region.size == 0:
         return 0.0
     mask = _mask_from_rgb(region.astype(np.float32), hue_range)
-    fill = float(np.median(mask.mean(axis=1)))
-    # Low health repaints the bar red (Samurai Shodown II also flashes it
-    # yellow), so a green-only mask reads a low bar as empty and ends the
-    # round early.  Accept those hues only as a *small* run: a wide red area
-    # is a stage flash or effect, not a health bar, and must not read as full.
-    lo, hi = hue_range
-    low = _mask_from_rgb(region.astype(np.float32), (0.0, lo)) if lo > 0.0 else mask
-    low |= _mask_from_rgb(region.astype(np.float32), (340.0, 360.0))
-    low_fill = float(np.median(low.mean(axis=1)))
-    if fill <= 0.01 and low_fill <= 0.35:
-        return low_fill
-    return fill
+    return float(np.median(mask.mean(axis=1)))
+
+
+def _bar_length(
+    frame: np.ndarray,
+    roi: tuple[int, int, int, int],
+    trim: int = 1,
+    threshold: float = 60.0,
+) -> float:
+    """Filled fraction of a bar, measured from whichever end it drains to.
+
+    Samurai Shodown II repaints the *whole* life bar (red, then flashing
+    white) while a fighter's POW gauge is full, so hue alone cannot be
+    trusted: a green-only mask reads a repainted bar as empty and ends the
+    round while both fighters are still standing.  The bar's *geometry*
+    survives the recolouring -- the filled part stays bright, the emptied
+    part stays dark -- so measure the run of bright columns starting at the
+    bar's filled end.
+
+    Games anchor that fill differently (the mock bars grow outwards, Samurai
+    Shodown II's grow towards the centre of the screen), and only one end is
+    bright, so the longer of the two runs is the fill.
+    """
+    y0, y1, x0, x1 = roi
+    region = frame[y0:y1, x0:x1, :3]
+    if region.size == 0:
+        return 0.0
+    luma = np.median(region.astype(np.float32).mean(axis=2), axis=0)
+    best = 0.0
+    for columns in (luma, luma[::-1]):
+        body = columns[trim:]
+        if body.size == 0:
+            continue
+        run = 0
+        for filled in body > threshold:
+            if not filled:
+                break
+            run += 1
+        best = max(best, run / float(body.size))
+    return best
 
 
 def _is_flat(frame: np.ndarray) -> bool:
@@ -305,6 +333,10 @@ def _is_flat(frame: np.ndarray) -> bool:
 class VisionStateReader:
     """Locates the two HUD health bars and tracks their fill fraction."""
 
+    # A bar that reads empty for this many consecutive emulated frames is
+    # genuinely depleted.  Shorter dropouts are HUD effects (see _settle).
+    DEATH_FRAMES = 12
+
     def __init__(self, hud: Mapping[str, Any] | None = None, top_fraction: float = 0.30):
         self.hud = dict(hud or {})
         self.top_fraction = top_fraction
@@ -316,6 +348,8 @@ class VisionStateReader:
         self._p1_full = 1.0
         self._p2_full = 1.0
         self._last_state: GameState | None = None
+        self._last_hp = {"p1": 1.0, "p2": 1.0}
+        self._empty_streak = {"p1": 0, "p2": 0}
 
     @property
     def calibrated(self) -> bool:
@@ -343,8 +377,10 @@ class VisionStateReader:
         if p1 is None or p2 is None:
             return False
         self._p1_roi, self._p2_roi = p1, p2
-        self._p1_full = max(self._fill(mask, p1), 1e-6)
-        self._p2_full = max(self._fill(mask, p2), 1e-6)
+        self._p1_full = max(_bar_length(frame, p1), 1e-6)
+        self._p2_full = max(_bar_length(frame, p2), 1e-6)
+        self._last_hp = {"p1": 1.0, "p2": 1.0}
+        self._empty_streak = {"p1": 0, "p2": 0}
         self._calibrated = True
         return True
 
@@ -386,14 +422,6 @@ class VisionStateReader:
         (y, x0, x1, _), (y2, u0, u1, _) = best
         return (max(0, y - 1), y + 2, x0, x1), (max(0, y2 - 1), y2 + 2, u0, u1)
 
-    @staticmethod
-    def _fill(mask: np.ndarray, roi: tuple[int, int, int, int]) -> float:
-        y0, y1, x0, x1 = roi
-        region = mask[y0:y1, x0:x1]
-        if region.size == 0:
-            return 0.0
-        return float(np.median(region.mean(axis=1)))
-
     def read(self, backend) -> GameState:
         frame = backend.screen()
         if _is_flat(frame):
@@ -403,15 +431,17 @@ class VisionStateReader:
             if not self.calibrate(frame):
                 state.valid = False
                 return state
-        p1_raw = _bar_fill(frame, self._p1_roi, self._hue) / self._p1_full
-        p2_raw = _bar_fill(frame, self._p2_roi, self._hue) / self._p2_full
-        if p1_raw < 0.02 and p2_raw < 0.02:
+        len1 = _bar_length(frame, self._p1_roi) / self._p1_full
+        len2 = _bar_length(frame, self._p2_roi) / self._p2_full
+        if len1 < 0.02 and len2 < 0.02:
             # No bars on screen: round transitions hide the HUD (and a double
             # KO draws an empty one).  Keep the last reading instead of
             # reporting a fake double death.
             return self._repeat_last()
-        p1 = float(np.clip(p1_raw, 0.0, 1.0))
-        p2 = float(np.clip(p2_raw, 0.0, 1.0))
+        green1 = _bar_fill(frame, self._p1_roi, self._hue)
+        green2 = _bar_fill(frame, self._p2_roi, self._hue)
+        p1 = self._settle("p1", len1, green1)
+        p2 = self._settle("p2", len2, green2)
         # Vision is noisy at the tails; snap clear extremes.
         p1 = 0.0 if p1 < 0.02 else (1.0 if p1 > 0.985 else p1)
         p2 = 0.0 if p2 < 0.02 else (1.0 if p2 > 0.985 else p2)
@@ -419,6 +449,36 @@ class VisionStateReader:
         state.p1_hp_max = state.p2_hp_max = 1.0
         self._last_state = state
         return state
+
+    def _settle(self, key: str, length: float, green: float) -> float:
+        """Turn one raw bar reading into health, ignoring recoloured HUDs.
+
+        Samurai Shodown II repaints a whole life bar red (then flashing
+        white/red) once that fighter's POW gauge is full, and keeps doing it
+        for as long as the gauge stays full -- which is most of the round.
+        The bar is still full-length, only its colour is gone, so report the
+        last trustworthy value rather than a fake KO.
+        """
+        last = self._last_hp[key]
+        if green < 0.02 and length > 0.80:
+            return last
+        if length < 0.02:
+            self._empty_streak[key] += 1
+            if self._empty_streak[key] >= self.DEATH_FRAMES:
+                self._last_hp[key] = 0.0
+                return 0.0
+            return last
+        self._empty_streak[key] = 0
+        # The emptied part of the bar keeps a bright damage band (orange in
+        # Samurai Shodown II, ~luma 120-190), so the geometric run keeps
+        # reporting a nearly full bar long after the fighter was hit.  The
+        # green segment is the *current* health and is the trustworthy
+        # measure whenever it exists; the run is only needed when the bar is
+        # painted in a non-green colour.
+        value = green if green >= 0.02 else length
+        value = float(np.clip(value, 0.0, 1.0))
+        self._last_hp[key] = value
+        return value
 
     def _repeat_last(self) -> GameState:
         if self._last_state is None:
