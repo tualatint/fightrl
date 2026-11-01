@@ -224,23 +224,7 @@ class RamStateReader:
 # --------------------------------------------------------------------------- #
 
 
-def _bar_mask(frame: np.ndarray, hue_range: tuple[float, float] = (35.0, 150.0)) -> np.ndarray:
-    """Mask of HUD health-bar pixels: vivid yellow/green, never blue or cyan.
-
-    Health bars are drawn in a green/yellow family.  Stage art that leaks into
-    the HUD band is either dark, red/orange or blue/cyan (e.g. Samurai Shodown
-    II's lightning flashes), so filtering by hue keeps those backgrounds out of
-    the fill measurement.  Brightness alone made the bar read as full whenever
-    the stage flashed.
-
-    The floor is 35 degrees, not 0: damage trails are orange, and their bright
-    shades (255, 101, 0) sit at ~24 degrees.  Games whose bar flashes yellow
-    while the trail animates through yellow too (Samurai Shodown II) can pass a
-    narrower ``hue_range`` such as (95, 150) to keep only the pure green.
-    """
-    if frame.ndim != 3 or frame.shape[2] < 3:
-        return np.zeros(frame.shape[:2], dtype=bool)
-    rgb = frame[..., :3].astype(np.float32)
+def _mask_from_rgb(rgb: np.ndarray, hue_range: tuple[float, float]) -> np.ndarray:
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     mx = rgb.max(axis=2)
     mn = rgb.min(axis=2)
@@ -257,6 +241,41 @@ def _bar_mask(frame: np.ndarray, hue_range: tuple[float, float] = (35.0, 150.0))
     return (hue >= lo) & (hue <= hi) & (sat > 0.35) & (mx > 110.0)
 
 
+def _bar_mask(frame: np.ndarray, hue_range: tuple[float, float] = (35.0, 150.0)) -> np.ndarray:
+    """Mask of HUD health-bar pixels: vivid yellow/green, never blue or cyan.
+
+    Health bars are drawn in a green/yellow family.  Stage art that leaks into
+    the HUD band is either dark, red/orange or blue/cyan (e.g. Samurai Shodown
+    II's lightning flashes), so filtering by hue keeps those backgrounds out of
+    the fill measurement.  Brightness alone made the bar read as full whenever
+    the stage flashed.
+
+    The floor is 35 degrees, not 0: damage trails are orange, and their bright
+    shades (255, 101, 0) sit at ~24 degrees.  Games whose bar flashes yellow
+    while the trail animates through yellow too (Samurai Shodown II) can pass a
+    narrower ``hue_range`` such as (95, 150) to keep only the pure green.
+    """
+    if frame.ndim != 3 or frame.shape[2] < 3:
+        return np.zeros(frame.shape[:2], dtype=bool)
+    return _mask_from_rgb(frame[..., :3].astype(np.float32), hue_range)
+
+
+def _bar_fill(
+    frame: np.ndarray, roi: tuple[int, int, int, int], hue_range: tuple[float, float]
+) -> float:
+    """Fill fraction of one bar, computed only inside its ROI.
+
+    Same result as ``_fill(_bar_mask(frame), roi)`` but touches ~3k pixels
+    instead of all 71k, which dominates the per-frame cost of vision stepping.
+    """
+    y0, y1, x0, x1 = roi
+    region = frame[y0:y1, x0:x1, :3]
+    if region.size == 0:
+        return 0.0
+    mask = _mask_from_rgb(region.astype(np.float32), hue_range)
+    return float(np.median(mask.mean(axis=1)))
+
+
 def _is_flat(frame: np.ndarray) -> bool:
     """True for full-screen flashes/fades, which carry no HUD information.
 
@@ -267,7 +286,7 @@ def _is_flat(frame: np.ndarray) -> bool:
     """
     if not frame.size:
         return False
-    pixels = frame.astype(np.float32)
+    pixels = frame[::4, ::4].astype(np.float32)
     luma = pixels.mean(axis=2) if pixels.ndim == 3 else pixels
     return bool(luma.std() < 3.0)
 
@@ -373,9 +392,8 @@ class VisionStateReader:
             if not self.calibrate(frame):
                 state.valid = False
                 return state
-        mask = _bar_mask(frame, self._hue)
-        p1_raw = self._fill(mask, self._p1_roi) / self._p1_full
-        p2_raw = self._fill(mask, self._p2_roi) / self._p2_full
+        p1_raw = _bar_fill(frame, self._p1_roi, self._hue) / self._p1_full
+        p2_raw = _bar_fill(frame, self._p2_roi, self._hue) / self._p2_full
         if p1_raw < 0.02 and p2_raw < 0.02:
             # No bars on screen: round transitions hide the HUD (and a double
             # KO draws an empty one).  Keep the last reading instead of
