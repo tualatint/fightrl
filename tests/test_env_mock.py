@@ -51,8 +51,13 @@ def test_hybrid_action_mode_mixes_primitives_and_skills():
     env.reset(seed=0)
     n_primitives = 9 * len(cfg.primitive_button_sets())
     assert cfg.primitive_button_sets()[0] == ()  # "no button" comes first
-    assert env.action_space.n == n_primitives + len(cfg.macros)
+    assert env.action_space.n == n_primitives + len(cfg.macros) + 1
     assert len(env.action_names) == env.action_space.n
+    assert env.action_names[-1] == "empty"
+    # The trailing empty action releases everything for the whole window.
+    empty = env.action_to_controllers(env.action_space.n - 1)
+    assert len(empty) == env.frameskip
+    assert all(c.direction == "neutral" and not c.buttons for c in empty)
 
     # Low indices are raw input, held for the frameskip window.
     sets = len(cfg.primitive_button_sets())
@@ -96,7 +101,7 @@ def test_hybrid_primitive_buttons_are_configurable():
     cfg.primitive_buttons = [(), ("LP",), ("LP", "HP")]
     env = make_env(cfg, opponent="none", action_mode="hybrid")
     env.reset(seed=0)
-    assert env.action_space.n == 9 * 3 + len(cfg.macros)
+    assert env.action_space.n == 9 * 3 + len(cfg.macros) + 1
     both = env.action_to_controllers(env.action_names.index("neutral+LP+HP"))
     assert both[0].buttons == frozenset({"LP", "HP"})
     env.close()

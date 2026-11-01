@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     mode = args.action_mode or config.action_mode_default
     if mode == "hybrid":
         print(f"action space: {venv.action_space} ({len(config.macros)} skills + "
-              f"{config.n_primitives} raw primitives)")
+              f"{config.n_primitives} raw primitives + 1 empty)")
     else:
         print(f"action space: {venv.action_space} ({len(config.macros)} macros)")
 

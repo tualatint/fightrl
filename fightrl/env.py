@@ -6,8 +6,9 @@ Observation is a dict:
 
 Action space depends on ``action_mode``:
     "macro":  Discrete(len(macros)) -- scripted moves (recommended)
-    "hybrid": Discrete(n_primitives + len(macros)) -- raw stick/button
-              primitives held for ``frameskip`` frames, plus skill macros
+    "hybrid": Discrete(n_primitives + len(macros) + 1) -- raw stick/button
+              primitives held for ``frameskip`` frames, skill macros, plus an
+              explicit "empty" action (all inputs released)
     "full":   MultiDiscrete([9, 2, 2, ...]) -- 8-way stick + button presses
 """
 
@@ -32,6 +33,9 @@ try:  # OpenCV is much faster than a numpy resize when present
     import cv2 as _cv2
 except Exception:  # pragma: no cover - optional dependency
     _cv2 = None
+
+# Label of the trailing "empty" hybrid action (all inputs released).
+EMPTY_ACTION = "empty"
 
 _RESIZE_CACHE: dict[tuple[int, int, int, int], tuple[np.ndarray, ...]] = {}
 
@@ -163,7 +167,9 @@ class FightEnv(gym.Env):
         if self.action_mode == "macro":
             self.action_space = spaces.Discrete(len(self.config.macros))
         elif self.action_mode == "hybrid":
-            self.action_space = spaces.Discrete(self._n_primitives + len(self.config.macros))
+            self.action_space = spaces.Discrete(
+                self._n_primitives + len(self.config.macros) + 1
+            )
         elif self.action_mode == "full":
             self.action_space = spaces.MultiDiscrete([9] + [2] * len(self.config.action_buttons))
         else:
@@ -186,7 +192,7 @@ class FightEnv(gym.Env):
     def action_names(self) -> list[str]:
         """Readable name per action index (macro and hybrid modes)."""
         if self.action_mode == "hybrid":
-            return self.primitive_names + self.macro_names
+            return self.primitive_names + self.macro_names + [EMPTY_ACTION]
         return self.macro_names
 
     def action_to_controllers(self, action: Any, side: int = 1) -> list[ControllerState]:
@@ -196,6 +202,9 @@ class FightEnv(gym.Env):
             return [step.controller(facing) for step in macro.steps for _ in range(step.frames)]
         if self.action_mode == "hybrid":
             index = int(action)
+            if index >= self._n_primitives + len(self.config.macros):
+                # Explicit empty action: nothing held for the whole window.
+                return [ControllerState()] * self.frameskip
             if index < self._n_primitives:
                 # Raw input: a stick direction held for the frameskip window,
                 # with buttons released on the last frame.  Fighting games
