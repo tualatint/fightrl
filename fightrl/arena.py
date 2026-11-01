@@ -93,13 +93,15 @@ class Session:
         self.seed = seed
         self.series = {"a": 0, "b": 0}
         self.swapped = False
+        self.rounds = {"a": 0, "b": 0}
+        self.round_no = 1
         self.frame_count = 0
         self.jpeg: bytes = b""
         self.jpeg_lock = threading.Lock()
         self.status = {
-            "phase": "starting", "winner": None, "hp1": 1.0, "hp2": 1.0,
+            "phase": "starting", "winner": None, "reason": None, "hp1": 1.0, "hp2": 1.0,
             "p1": "", "p2": "", "frames": 0,
-            "series": {"a": 0, "b": 0},
+            "series": {"a": 0, "b": 0}, "round": 1, "best_of": 3,
             "labels": self.labels,
         }
         self.stop = threading.Event()
@@ -132,7 +134,9 @@ class Session:
         self.env.opponent = make_opponent(
             f"checkpoint:{self.paths[p2_key]}", config=self.env.config, env=self.env
         )
-        self.status.update({"phase": "fight", "winner": None, "p1": p1_key, "p2": p2_key})
+        self.status.update({"phase": "fight", "winner": None, "reason": None, "p1": p1_key,
+                            "p2": p2_key, "round": self.round_no,
+                            "series": dict(self.rounds)})
         self._next_frame = time.perf_counter() + 0.05
         return self.env.reset(seed=self.seed + self.series["a"] + self.series["b"])
 
@@ -153,15 +157,35 @@ class Session:
                 })
                 if terminated or truncated:
                     winner = int(info["winner"])
+                    reason = (
+                        "time_limit" if truncated
+                        else "ko" if info.get("round_over") else "hud_reset"
+                    )
+                    print(
+                        f"[arena] end reason={reason} winner={winner} "
+                        f"frames={info.get('frames')} hp1={info.get('p1_frac'):.3f} "
+                        f"hp2={info.get('p2_frac'):.3f}",
+                        flush=True,
+                    )
                     if winner:
                         key = self.status["p1"] if winner == 1 else self.status["p2"]
-                        self.series[key] += 1
+                        self.rounds[key] += 1
                         self.status["winner"] = key
-                    self.status["phase"] = "intermission"
-                    self.status["series"] = dict(self.series)
-                    if self.stop.wait(2.5):
-                        break
-                    self.swapped = not self.swapped
+                    self.status["series"] = dict(self.rounds)
+                    if self.rounds["a"] < 2 and self.rounds["b"] < 2:
+                        self.status["phase"] = "intermission"
+                        self.status["reason"] = reason
+                        if self.stop.wait(2.5):
+                            break
+                        self.round_no += 1
+                    else:
+                        self.status["phase"] = "match_over"
+                        self.status["reason"] = reason
+                        if self.stop.wait(4.0):
+                            break
+                        self.rounds = {"a": 0, "b": 0}
+                        self.round_no = 1
+                        self.swapped = not self.swapped
                     obs, _ = self._start_match()
                     continue
         finally:

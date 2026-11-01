@@ -273,7 +273,18 @@ def _bar_fill(
     if region.size == 0:
         return 0.0
     mask = _mask_from_rgb(region.astype(np.float32), hue_range)
-    return float(np.median(mask.mean(axis=1)))
+    fill = float(np.median(mask.mean(axis=1)))
+    # Low health repaints the bar red (Samurai Shodown II also flashes it
+    # yellow), so a green-only mask reads a low bar as empty and ends the
+    # round early.  Accept those hues only as a *small* run: a wide red area
+    # is a stage flash or effect, not a health bar, and must not read as full.
+    lo, hi = hue_range
+    low = _mask_from_rgb(region.astype(np.float32), (0.0, lo)) if lo > 0.0 else mask
+    low |= _mask_from_rgb(region.astype(np.float32), (340.0, 360.0))
+    low_fill = float(np.median(low.mean(axis=1)))
+    if fill <= 0.01 and low_fill <= 0.35:
+        return low_fill
+    return fill
 
 
 def _is_flat(frame: np.ndarray) -> bool:

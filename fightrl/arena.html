@@ -176,7 +176,7 @@ async function poll() {
   if (!data.active || data.session !== session) return;
   $("hpA").style.width = (data.hp1 * 100).toFixed(1) + "%";
   $("hpB").style.width = (data.hp2 * 100).toFixed(1) + "%";
-  $("phase").textContent = data.phase;
+  $("phase").textContent = data.phase + (data.round ? " · round " + data.round : "");
   $("dot").classList.toggle("live", data.phase === "fight");
   $("frames").textContent = "frame " + (data.frames || 0).toLocaleString();
   const p1 = data.p1 === "a" ? $("selA").value : $("selB").value;
@@ -187,7 +187,10 @@ async function poll() {
   const banner = $("banner");
   if (data.winner) {
     const key = data.winner === "a" ? $("selA").value : $("selB").value;
-    banner.innerHTML = `${labelOf(key)} wins<small>next match starts soon · sides swap</small>`;
+    const score = `${data.series.a}–${data.series.b}`;
+    banner.innerHTML = data.phase === "match_over"
+      ? `${labelOf(key)} wins the fight ${score}<small>next fight starts soon · sides swap</small>`
+      : `${labelOf(key)} wins round ${data.round}<small>best of 3 · score ${score}</small>`;
     banner.classList.add("show");
   } else {
     banner.classList.remove("show");

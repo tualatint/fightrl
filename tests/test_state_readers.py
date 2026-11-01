@@ -34,6 +34,26 @@ def test_ram_reader_detects_out_of_range_values():
     assert not reader.read(backend).valid
 
 
+def test_bar_fill_reads_low_health_red():
+    """A depleted bar turns red; the reader must not mistake that for death."""
+    from fightrl.core.state import _bar_fill
+
+    roi = (0, 30, 0, 128)
+    frame = np.zeros((30, 128, 3), np.uint8)
+    frame[:, :26] = (220, 8, 8)  # ~20% low-health red
+    red = _bar_fill(frame, roi, (95.0, 150.0))
+    assert 0.15 <= red <= 0.25, red
+    green = np.zeros_like(frame)
+    green[:, :64] = (8, 220, 60)
+    assert 0.45 <= _bar_fill(green, roi, (95.0, 150.0)) <= 0.55
+    # A wide red area is a stage flash, not a full bar.
+    flash = np.zeros((30, 128, 3), np.uint8)
+    flash[:, :] = (220, 8, 8)
+    assert _bar_fill(flash, roi, (95.0, 150.0)) == 0.0
+    empty = np.zeros((30, 128, 3), np.uint8)
+    assert _bar_fill(empty, roi, (95.0, 150.0)) == 0.0
+
+
 def test_vision_matches_ram():
     cfg = load_game_config("mock", state_source="vision")
     env = FightEnv(cfg, opponent="aggressive")
