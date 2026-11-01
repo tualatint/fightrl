@@ -120,10 +120,12 @@ class PolicyOpponent(Opponent):
         self.deterministic = deterministic
         self._pending: list[ControllerState] = []
         self._last_obs = None
+        self.last_action: int | None = None
 
     def reset(self) -> None:
         self._pending = []
         self._last_obs = None
+        self.last_action = None
 
     def set_model(self, model: Any) -> None:
         self.model = model
@@ -134,6 +136,7 @@ class PolicyOpponent(Opponent):
             if obs is None:
                 return ControllerState()
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
+            self.last_action = int(np.asarray(action).reshape(-1)[0])
             self._pending = self.action_decode(action)
         return self._pending.pop(0) if self._pending else ControllerState()
 
@@ -214,6 +217,11 @@ class LeagueOpponent(Opponent):
         if self._player is None:
             return self._bootstrap_active.act(obs, info, state)
         return self._player.act(obs, info, state)
+
+    @property
+    def last_action(self) -> int | None:
+        """Index of the opponent's own most recent decision, if it is a policy."""
+        return self._player.last_action if self._player is not None else None
 
 
 def _load_policy(path: str, action_decode, deterministic: bool) -> PolicyOpponent:

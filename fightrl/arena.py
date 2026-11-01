@@ -10,11 +10,14 @@ both policies play P1 and P2.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import pickle
 import random
 import re
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -25,11 +28,13 @@ from PIL import Image
 from pydantic import BaseModel
 from stable_baselines3 import PPO
 
-from .env import FightEnv
+from .core.config import load_game_config
+from .env import FightEnv, observation_space_for
 from .opponents import make_opponent
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS = ROOT / "runs" / "samsho2_ppo"
+GAME = "samsho2_neogeo"
+RUNS = ROOT / "runs"
 PAGE = Path(__file__).with_name("arena.html")
 
 app = FastAPI(title="FightRL Arena")
@@ -66,12 +71,52 @@ def _shutdown(session: "Session") -> None:
     session.thread.join(timeout=8.0)
 
 
+def _space_signature(space: object) -> dict[str, tuple]:
+    """Keys, shapes and dtypes of a (possibly dict) space, for comparison."""
+    subspaces = getattr(space, "spaces", None)
+    if isinstance(subspaces, dict):
+        return {
+            key: (tuple(sub.shape), str(sub.dtype))
+            for key, sub in subspaces.items()
+        }
+    return {"": (tuple(getattr(space, "shape", ())), str(getattr(space, "dtype", "")))}
+
+
+def _stored_spaces(path: Path) -> tuple[int | None, dict[str, tuple] | None]:
+    """Action count and observation signature of a checkpoint, weightless.
+
+    SB3 2.x stores both spaces in its JSON ``data`` entry as base64 pickles.
+    """
+    try:
+        with zipfile.ZipFile(path) as archive:
+            data = json.loads(archive.read("data"))
+        action = pickle.loads(base64.b64decode(data["action_space"][":serialized:"]))
+        observation = pickle.loads(base64.b64decode(data["observation_space"][":serialized:"]))
+    except Exception:
+        return None, None
+    return int(action.n), _space_signature(observation)
+
+
+def _expected_spaces() -> tuple[int, dict[str, tuple]]:
+    config = load_game_config(GAME)
+    return config.hybrid_action_count, _space_signature(observation_space_for(config))
+
+
 def _list_models() -> list[dict[str, object]]:
+    expected_actions, expected_obs = _expected_spaces()
     items = []
-    for path in list((RUNS / "checkpoints").glob("*.zip")) + list(RUNS.glob("final*.zip")):
+    for path in sorted(list(RUNS.glob("*/checkpoints/*.zip")) + list(RUNS.glob("*/final*.zip"))):
+        # Checkpoints with a different action space or observation would index
+        # into the wrong inputs, so they are hidden rather than offered and broken.
+        if _stored_spaces(path) != (expected_actions, expected_obs):
+            continue
         match = re.search(r"(\d{6,})", path.stem)
         steps = int(match.group(1)) if match else 0
-        items.append({"id": str(path), "label": f"{path.stem} · {steps:,} steps", "steps": steps})
+        items.append({
+            "id": str(path),
+            "label": f"{path.parent.parent.name}/{path.stem} · {steps:,} steps",
+            "steps": steps,
+        })
     return sorted(items, key=lambda item: -int(item["steps"]))
 
 
@@ -222,16 +267,21 @@ def models() -> dict:
 
 @app.post("/api/start")
 def start(request: StartRequest) -> dict:
+    expected = _expected_spaces()
     for path in (request.p1, request.p2):
         if not path.startswith(str(RUNS)) or not Path(path).exists():
             raise HTTPException(status_code=400, detail=f"unknown model: {path}")
+        if _stored_spaces(Path(path)) != expected:
+            raise HTTPException(
+                status_code=400,
+                detail=f"model was trained on a different action/observation space: {path}",
+            )
     with LOCK:
         old = STATE["session"]
         if isinstance(old, Session):
             _shutdown(old)
         STATE["id"] = int(STATE["id"]) + 1
-        session = Session("samsho2_neogeo", request.p1, request.p2, request.seed,
-                          int(STATE["id"]))
+        session = Session(GAME, request.p1, request.p2, request.seed, int(STATE["id"]))
         STATE["session"] = session
         session.start()
         return {"session": STATE["id"], "labels": session.labels}

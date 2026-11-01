@@ -39,7 +39,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from .backends.base import Backend
 from .core.config import load_game_config
 from .core.controller import ControllerState
-from .env import FightEnv
+from .env import FightEnv, _mirror_history, _mirror_state
 from .opponents import Opponent, PolicyOpponent, ScriptedBot
 from .train import LeagueCheckpointCallback, WinRateCallback
 
@@ -119,18 +119,22 @@ class P2PerspectiveEnv(FightEnv):
         super().__init__(game, opponent="none", **kwargs)
         self.backend = SwappedBackend(self.backend)
         self.opponent = build_p1_opponent(opponent, self)
+        self.opponent_side = 1
 
     # The learner is P2, so macro directions resolve against P2's facing.
     def action_to_controllers(self, action: Any, side: int = 2) -> list[ControllerState]:
         return super().action_to_controllers(action, side=2)
 
     def _observe(self) -> dict[str, np.ndarray]:
-        obs = super()._observe()  # canonical; also sets self._last_obs
-        mirrored = FightEnv._opponent_obs(obs)
-        # _last_obs feeds the P1 opponent via _opponent_obs, which mirrors
-        # again -- the mirror is an involution, so P1 sees the canonical view.
-        self._last_obs = mirrored
-        return mirrored
+        canonical = super()._observe()  # also sets self._last_obs
+        # The learner is P2, so it sees the mirrored view.  _last_obs stays
+        # canonical: that is what _opponent_obs hands to the P1 opponent,
+        # which needs the unmirrored state and its own action history there.
+        return {
+            "pixels": canonical["pixels"],
+            "state": _mirror_state(canonical["state"]),
+            "history": _mirror_history(canonical["history"]),
+        }
 
     def _reward(self, prev: Any, cur: Any, frames: int) -> tuple[float, float, float]:
         w = self.config.reward

@@ -63,9 +63,13 @@ def test_real_games_default_to_hybrid_skills():
     for game in ("sf2_snes", "sf2_genesis", "samsho2_neogeo"):
         cfg = load_game_config(game)
         assert cfg.action_mode_default == "hybrid", game
-        assert cfg.n_primitives == len(DIRECTIONS) * (1 + len(cfg.action_buttons))
+        if cfg.primitive_actions is None:
+            assert cfg.n_primitives == len(DIRECTIONS) * (1 + len(cfg.action_buttons))
+        else:
+            # A curated list is exhaustive rather than a direction x button grid.
+            assert cfg.n_primitives == len(cfg.primitive_actions)
     names = [m.name for m in load_game_config("samsho2_neogeo").macros]
-    assert {"qcf_A", "dp_A", "qcb_A"} <= set(names)
+    assert {"weapon_smash", "cyclone_A", "crescent_AB", "resshin_CD"} <= set(names)
 
 
 def test_hybrid_skills_only_use_configured_buttons():
@@ -79,10 +83,12 @@ def test_hybrid_skills_only_use_configured_buttons():
 def test_generic_skills_press_a_button_the_game_has():
     for game in ("mock", "samsho2_neogeo"):
         cfg = load_game_config(game)
-        for name in ("jump_attack", "crouch_attack"):
-            macro = next(m for m in cfg.macros if m.name == name)
+        # The curated SamSho space drops the untimed generic macros but keeps
+        # timed versions, so look them up by prefix.
+        for prefix in ("jump_attack", "crouch_attack"):
+            macro = next(m for m in cfg.macros if m.name.startswith(prefix))
             pressed = {b for step in macro.steps for b in step.buttons}
-            assert pressed and pressed <= set(cfg.action_buttons), (game, name)
+            assert pressed and pressed <= set(cfg.action_buttons), (game, macro.name)
 
 
 def test_primitive_buttons_must_exist():

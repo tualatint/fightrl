@@ -20,8 +20,30 @@ def test_spaces(env):
     assert env.observation_space.contains(obs)
     assert obs["pixels"].shape == (4, 84, 84)
     assert obs["state"].shape == (12,)
+    assert obs["history"].shape == (12 + 4 * len(env.macro_names),)
     assert info["p1_hp"] == 176
     assert env.action_space.n == len(env.macro_names)
+
+
+def test_history_records_decisions():
+    env = make_env("mock", opponent="none")
+    env.reset(seed=0)
+    n = env.action_space.n
+    actions = [3, 1, 4, 0, 2]
+    before = env.state.features(12)
+    obs = None
+    for action in actions:
+        obs, *_ = env.step(action)
+        assert obs["history"][12 + action] == 1.0
+        assert obs["history"][:12].tolist() == before.tolist()
+        before = env.state.features(12)
+    # Only the last four decisions are kept, newest first.
+    for offset, action in enumerate(reversed(actions[-4:])):
+        assert obs["history"][12 + offset * n + action] == 1.0
+    for slot in range(4):
+        block = obs["history"][12 + slot * n: 12 + (slot + 1) * n]
+        assert block.sum() == 1.0
+    env.close()
 
 
 def test_step_contract(env):
@@ -107,6 +129,24 @@ def test_hybrid_primitive_buttons_are_configurable():
     env.close()
 
 
+def test_explicit_primitive_actions_replace_the_grid():
+    cfg = load_game_config("mock")
+    cfg.primitive_actions = [
+        {"name": "idle", "dir": "neutral", "buttons": (), "frames": None},
+        {"name": "slash_heavy", "dir": "neutral", "buttons": ("LP", "HP"), "frames": None},
+        {"name": "walk_fwd", "dir": "right", "buttons": (), "frames": 5},
+    ]
+    env = make_env(cfg, opponent="none", action_mode="hybrid")
+    env.reset(seed=0)
+    assert env.action_space.n == 3 + len(cfg.macros)
+    assert env.action_names[:3] == ["idle", "slash_heavy", "walk_fwd"]
+    # An explicit list is exhaustive: the grid's empty slot is no longer added.
+    assert "empty" not in env.action_names
+    assert env.action_to_controllers(1)[0].buttons == frozenset({"LP", "HP"})
+    assert len(env.action_to_controllers(2)) == 5
+    env.close()
+
+
 def test_macro_resolution_respects_facing():
     cfg = load_game_config("mock")
     env = make_env(cfg, opponent="none")
@@ -153,6 +193,29 @@ def test_determinism_without_opponent():
         return rewards, info["p1_hp"], info["p2_hp"]
 
     assert rollout() == rollout()
+
+
+def test_weapon_break_bonus_rewards_damage_dealt():
+    results = {}
+    attack = None
+    for bonus in (0.0, 2.0):
+        cfg = load_game_config("mock")
+        cfg.reward = {**cfg.reward, "weapon_break_deal": bonus}
+        cfg.weapon_break = ["attack_HP"]
+        env = make_env(cfg, opponent="none")
+        env.reset(seed=0)
+        env.backend.p1.x, env.backend.p2.x = 180.0, 205.0
+        env.state = env.reader.read()
+        attack = env.action_names.index("attack_HP")
+        _, reward, _, _, info = env.step(attack)
+        results[bonus] = (reward, info["dmg_dealt"], env._weapon_break_indices)
+        env.close()
+
+    plain, damage, indices = results[0.0]
+    boosted, other_damage, _ = results[2.0]
+    assert damage == other_damage > 0  # the mock is deterministic
+    assert boosted - plain == pytest.approx(2.0 * damage)
+    assert indices == {attack}  # only the configured action carries the bonus
 
 
 def test_blocking_and_damage_shape_reward():

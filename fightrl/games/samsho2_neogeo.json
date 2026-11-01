@@ -32,45 +32,649 @@
     "C",
     "D"
   ],
-  "special_macros": [
+  "weapon_break": [
+    "weapon_smash"
+  ],
+  "reward": {
+    "weapon_break_deal": 1.5
+  },
+  "primitive_actions": [
     {
-      "name": "qcf_A",
-      "steps": [
-        {"dir": "down", "frames": 2},
-        {"dir": "down_fwd", "frames": 2},
-        {"dir": "fwd", "frames": 2},
-        {"dir": "fwd", "buttons": ["A"], "frames": 6},
-        {"dir": "neutral", "frames": 6}
+      "name": "idle",
+      "dir": "neutral"
+    },
+    {
+      "name": "walk_fwd",
+      "dir": "right"
+    },
+    {
+      "name": "walk_back",
+      "dir": "left"
+    },
+    {
+      "name": "crouch",
+      "dir": "down"
+    },
+    {
+      "name": "guard_crouch",
+      "dir": "down_left"
+    },
+    {
+      "name": "jump_up",
+      "dir": "up"
+    },
+    {
+      "name": "jump_fwd",
+      "dir": "up_right"
+    },
+    {
+      "name": "jump_back",
+      "dir": "up_left"
+    },
+    {
+      "name": "slash_light",
+      "dir": "neutral",
+      "buttons": [
+        "A"
       ]
     },
     {
-      "name": "qcf_B",
-      "steps": [
-        {"dir": "down", "frames": 2},
-        {"dir": "down_fwd", "frames": 2},
-        {"dir": "fwd", "frames": 2},
-        {"dir": "fwd", "buttons": ["B"], "frames": 6},
-        {"dir": "neutral", "frames": 6}
+      "name": "slash_medium",
+      "dir": "neutral",
+      "buttons": [
+        "B"
       ]
     },
     {
-      "name": "dp_A",
-      "steps": [
-        {"dir": "fwd", "frames": 2},
-        {"dir": "down", "frames": 2},
-        {"dir": "down_fwd", "frames": 2},
-        {"dir": "down_fwd", "buttons": ["A"], "frames": 6},
-        {"dir": "neutral", "frames": 8}
+      "name": "slash_heavy",
+      "dir": "neutral",
+      "buttons": [
+        "A",
+        "B"
       ]
     },
     {
-      "name": "qcb_A",
+      "name": "kick_light",
+      "dir": "neutral",
+      "buttons": [
+        "C"
+      ]
+    },
+    {
+      "name": "kick_medium",
+      "dir": "neutral",
+      "buttons": [
+        "D"
+      ]
+    },
+    {
+      "name": "kick_heavy",
+      "dir": "neutral",
+      "buttons": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "name": "crouch_slash_light",
+      "dir": "down",
+      "buttons": [
+        "A"
+      ]
+    },
+    {
+      "name": "crouch_slash_medium",
+      "dir": "down",
+      "buttons": [
+        "B"
+      ]
+    },
+    {
+      "name": "crouch_slash_heavy",
+      "dir": "down",
+      "buttons": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "name": "crouch_kick_light",
+      "dir": "down",
+      "buttons": [
+        "C"
+      ]
+    },
+    {
+      "name": "crouch_kick_medium",
+      "dir": "down",
+      "buttons": [
+        "D"
+      ]
+    },
+    {
+      "name": "crouch_kick_heavy",
+      "dir": "down",
+      "buttons": [
+        "C",
+        "D"
+      ]
+    }
+  ],
+  "macros": [
+    {
+      "name": "walk_fwd_8",
       "steps": [
-        {"dir": "down", "frames": 2},
-        {"dir": "down_back", "frames": 2},
-        {"dir": "back", "frames": 2},
-        {"dir": "back", "buttons": ["A"], "frames": 6},
-        {"dir": "neutral", "frames": 8}
+        {
+          "dir": "fwd",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "walk_back_8",
+      "steps": [
+        {
+          "dir": "back",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "guard_10",
+      "steps": [
+        {
+          "dir": "back",
+          "frames": 10
+        }
+      ]
+    },
+    {
+      "name": "crouch_8",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "dash_fwd",
+      "steps": [
+        {
+          "dir": "fwd",
+          "frames": 4
+        },
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "dash_back",
+      "steps": [
+        {
+          "dir": "back",
+          "frames": 4
+        },
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "lie_down",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 3
+        },
+        {
+          "dir": "neutral",
+          "frames": 1
+        },
+        {
+          "dir": "down",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "hop_BC",
+      "steps": [
+        {
+          "dir": "neutral",
+          "buttons": [
+            "B",
+            "C"
+          ],
+          "frames": 3
+        },
+        {
+          "dir": "neutral",
+          "frames": 3
+        }
+      ]
+    },
+    {
+      "name": "jump_slash_light",
+      "steps": [
+        {
+          "dir": "up",
+          "frames": 8
+        },
+        {
+          "dir": "up",
+          "buttons": [
+            "A"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "jump_slash_medium",
+      "steps": [
+        {
+          "dir": "up",
+          "frames": 8
+        },
+        {
+          "dir": "up",
+          "buttons": [
+            "B"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "jump_kick_light",
+      "steps": [
+        {
+          "dir": "up",
+          "frames": 8
+        },
+        {
+          "dir": "up",
+          "buttons": [
+            "C"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "jump_kick_medium",
+      "steps": [
+        {
+          "dir": "up",
+          "frames": 8
+        },
+        {
+          "dir": "up",
+          "buttons": [
+            "D"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "jump_attack_28",
+      "steps": [
+        {
+          "dir": "fwd_up",
+          "frames": 8
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "B"
+          ],
+          "frames": 10
+        },
+        {
+          "dir": "neutral",
+          "frames": 10
+        }
+      ]
+    },
+    {
+      "name": "crouch_attack_18",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down",
+          "buttons": [
+            "C"
+          ],
+          "frames": 10
+        },
+        {
+          "dir": "down",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "attack_A_14",
+      "steps": [
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "neutral",
+          "buttons": [
+            "A"
+          ],
+          "frames": 8
+        },
+        {
+          "dir": "neutral",
+          "frames": 4
+        }
+      ]
+    },
+    {
+      "name": "attack_B_14",
+      "steps": [
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "neutral",
+          "buttons": [
+            "B"
+          ],
+          "frames": 8
+        },
+        {
+          "dir": "neutral",
+          "frames": 4
+        }
+      ]
+    },
+    {
+      "name": "attack_C_14",
+      "steps": [
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "neutral",
+          "buttons": [
+            "C"
+          ],
+          "frames": 8
+        },
+        {
+          "dir": "neutral",
+          "frames": 4
+        }
+      ]
+    },
+    {
+      "name": "attack_D_14",
+      "steps": [
+        {
+          "dir": "neutral",
+          "frames": 2
+        },
+        {
+          "dir": "neutral",
+          "buttons": [
+            "D"
+          ],
+          "frames": 8
+        },
+        {
+          "dir": "neutral",
+          "frames": 4
+        }
+      ]
+    },
+    {
+      "name": "cyclone_A",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "A"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "cyclone_AB",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "A",
+            "B"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "cyclone_CD",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "C",
+            "D"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "crescent_AB",
+      "steps": [
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down_back",
+          "frames": 2
+        },
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "buttons": [
+            "A",
+            "B"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "resshin_CD",
+      "steps": [
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "buttons": [
+            "C",
+            "D"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
+      ]
+    },
+    {
+      "name": "sake_A",
+      "steps": [
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "buttons": [
+            "A"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "weapon_smash",
+      "steps": [
+        {
+          "dir": "fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down_fwd",
+          "frames": 2
+        },
+        {
+          "dir": "down",
+          "frames": 2
+        },
+        {
+          "dir": "down_back",
+          "frames": 2
+        },
+        {
+          "dir": "back",
+          "frames": 2
+        },
+        {
+          "dir": "fwd",
+          "buttons": [
+            "A"
+          ],
+          "frames": 6
+        },
+        {
+          "dir": "neutral",
+          "frames": 8
+        }
       ]
     }
   ],

@@ -37,6 +37,91 @@ except Exception:  # pragma: no cover - optional dependency
 # Label of the trailing "empty" hybrid action (all inputs released).
 EMPTY_ACTION = "empty"
 
+# Decisions remembered in the ``history`` observation, plus the state each
+# decision started from.  Without them the agent cannot tell what it just
+# committed to: one step is 3 frames or a 28-frame jump, so stacking four
+# frames alone encodes a window anywhere between 0.2 s and 1.4 s.
+HISTORY_ACTIONS = 4
+
+
+def _mirror_state(features: np.ndarray) -> np.ndarray:
+    """Flip a state vector so a P1 policy can play as P2."""
+    mirrored = features.copy()
+    mirrored[0], mirrored[1] = features[1], features[0]
+    mirrored[4], mirrored[5] = features[5], features[4]
+    mirrored[2] = -features[2]
+    mirrored[7] = -features[7]
+    return mirrored
+
+
+def _mirror_history(history: np.ndarray) -> np.ndarray:
+    """Mirror the state block of ``history``; action one-hots stay put.
+
+    The one-hots index the acting side's own decisions, so they mean the same
+    thing in either view; only the state the decision started from flips.
+    """
+    mirrored = history.copy()
+    mirrored[:12] = _mirror_state(history[:12])
+    return mirrored
+
+
+def action_count_for(config: Any, action_mode: str | None = None) -> int:
+    """Number of discrete decisions for ``config``; 0 means MultiDiscrete."""
+    mode = action_mode or config.action_mode_default
+    if mode == "macro":
+        return len(config.macros)
+    if mode == "hybrid":
+        return config.hybrid_action_count
+    if mode == "full":
+        return 0
+    raise ValueError(f"unknown action_mode {mode!r}")
+
+
+def action_names_for(config: Any, action_mode: str | None = None) -> list[str]:
+    """Readable name per action index, without needing an emulator."""
+    mode = action_mode or config.action_mode_default
+    macros = [m.name for m in config.macros]
+    if mode != "hybrid":
+        return macros
+    explicit = config.primitive_actions
+    if explicit is not None:
+        primitives = [
+            str(entry["name"]) or f"{entry['dir']}+{'+'.join(entry['buttons']) or 'none'}"
+            for entry in explicit
+        ]
+        extra: list[str] = []
+    else:
+        primitives = [
+            f"{direction}+{'+'.join(buttons) if buttons else 'none'}"
+            for direction in DIRECTIONS
+            for buttons in config.primitive_button_sets()
+        ]
+        extra = [EMPTY_ACTION]
+    return primitives + macros + extra
+
+
+def observation_space_for(
+    config: Any,
+    *,
+    obs_size: tuple[int, int] = (84, 84),
+    frame_stack: int = 4,
+    history_actions: int = HISTORY_ACTIONS,
+    action_mode: str | None = None,
+) -> spaces.Dict:
+    """Observation space for ``config``, without needing an emulator."""
+    n_actions = action_count_for(config, action_mode)
+    h, w = obs_size
+    return spaces.Dict(
+        {
+            "pixels": spaces.Box(0, 255, (frame_stack, h, w), dtype=np.uint8),
+            "state": spaces.Box(-2.0, 2.0, (12,), dtype=np.float32),
+            "history": spaces.Box(
+                -2.0, 2.0, (12 + history_actions * n_actions,), dtype=np.float32
+            ),
+        }
+    )
+
+
 _RESIZE_CACHE: dict[tuple[int, int, int, int], tuple[np.ndarray, ...]] = {}
 
 
@@ -86,6 +171,7 @@ class FightEnv(gym.Env):
         frameskip: int | None = None,
         obs_size: tuple[int, int] = (84, 84),
         frame_stack: int = 4,
+        history_actions: int = HISTORY_ACTIONS,
         grayscale: bool = True,
         max_episode_frames: int | None = None,
         backend: Backend | None = None,
@@ -114,11 +200,14 @@ class FightEnv(gym.Env):
         self.capture_video = capture_video
         self.frameskip = int(frameskip or self.config.frameskip)
         self.action_mode = action_mode or self.config.action_mode_default
+        self.opponent_side = 2  # DuelEnv overrides: the learner plays P2 there
         self._primitive_sets = self.config.primitive_button_sets()
+        self._explicit = self.config.primitive_actions
         self._n_primitives = self.config.n_primitives
         self.max_episode_frames = int(max_episode_frames or self.config.max_episode_frames)
         self.obs_size = tuple(obs_size)
         self.frame_stack = int(frame_stack)
+        self.history_actions = int(history_actions)
         self.grayscale = grayscale
 
         self.backend = backend if backend is not None else make_backend(self.config, capture_video)
@@ -147,6 +236,13 @@ class FightEnv(gym.Env):
         self._damaged_streak = 0
 
         self._build_spaces()
+        # Actions whose damage earns ``reward.weapon_break_deal`` on top of the
+        # normal damage term -- the rage-gauge special is otherwise invisible
+        # to the agent, so connecting with it needs an explicit incentive.
+        break_names = set(self.config.weapon_break)
+        self._weapon_break_indices = {
+            index for index, name in enumerate(self.action_names) if name in break_names
+        }
         self.opponent = (
             make_opponent(opponent, config=self.config, env=self)
             if isinstance(opponent, str)
@@ -157,19 +253,23 @@ class FightEnv(gym.Env):
 
     # -- spaces --------------------------------------------------------- #
     def _build_spaces(self) -> None:
-        h, w = self.obs_size
-        self.observation_space = spaces.Dict(
-            {
-                "pixels": spaces.Box(0, 255, (self.frame_stack, h, w), dtype=np.uint8),
-                "state": spaces.Box(-2.0, 2.0, (12,), dtype=np.float32),
-            }
+        self.observation_space = observation_space_for(
+            self.config,
+            obs_size=self.obs_size,
+            frame_stack=self.frame_stack,
+            history_actions=self.history_actions,
+            action_mode=self.action_mode,
         )
+        n_actions = action_count_for(self.config, self.action_mode)
+        self._history_dim = self.observation_space["history"].shape[0]
+        self._hist = np.zeros(self._history_dim, np.float32)
+        self._opp_hist = np.zeros(self._history_dim, np.float32)
+        self._opp_action: int | None = None
+
         if self.action_mode == "macro":
             self.action_space = spaces.Discrete(len(self.config.macros))
         elif self.action_mode == "hybrid":
-            self.action_space = spaces.Discrete(
-                self._n_primitives + len(self.config.macros) + 1
-            )
+            self.action_space = spaces.Discrete(n_actions)
         elif self.action_mode == "full":
             self.action_space = spaces.MultiDiscrete([9] + [2] * len(self.config.action_buttons))
         else:
@@ -182,6 +282,11 @@ class FightEnv(gym.Env):
     @property
     def primitive_names(self) -> list[str]:
         """Labels for the raw stick+button half of a hybrid action space."""
+        if self._explicit is not None:
+            return [
+                str(entry["name"]) or f"{entry['dir']}+{'+'.join(entry['buttons']) or 'none'}"
+                for entry in self._explicit
+            ]
         return [
             f"{direction}+{'+'.join(buttons) if buttons else 'none'}"
             for direction in DIRECTIONS
@@ -191,9 +296,7 @@ class FightEnv(gym.Env):
     @property
     def action_names(self) -> list[str]:
         """Readable name per action index (macro and hybrid modes)."""
-        if self.action_mode == "hybrid":
-            return self.primitive_names + self.macro_names + [EMPTY_ACTION]
-        return self.macro_names
+        return action_names_for(self.config, self.action_mode)
 
     def action_to_controllers(self, action: Any, side: int = 1) -> list[ControllerState]:
         facing = self.state.p1_facing if side == 1 else -self.state.p1_facing
@@ -206,6 +309,16 @@ class FightEnv(gym.Env):
                 # Explicit empty action: nothing held for the whole window.
                 return [ControllerState()] * self.frameskip
             if index < self._n_primitives:
+                if self._explicit is not None:
+                    entry = self._explicit[index]
+                    direction = str(entry["dir"])
+                    buttons = frozenset(entry["buttons"])
+                    frames = int(entry["frames"] or self.frameskip)
+                    if not buttons:
+                        return [ControllerState(direction, frozenset())] * frames
+                    held = max(1, frames - 1)
+                    return ([ControllerState(direction, buttons)] * held
+                            + [ControllerState(direction, frozenset())] * (frames - held))
                 # Raw input: a stick direction held for the frameskip window,
                 # with buttons released on the last frame.  Fighting games
                 # edge-trigger attacks, so a button held every frame would
@@ -269,6 +382,7 @@ class FightEnv(gym.Env):
         self._damaged_streak = 0
         self._last_damaged_state = None
         self._reset_pixels()
+        self._reset_history()
         obs = self._observe()
         info = self._info()
         return obs, info
@@ -290,6 +404,7 @@ class FightEnv(gym.Env):
             self._prev_state = self.state
 
         agent_ctrls = self.action_to_controllers(action)
+        start_features = self.state.features(12)
         reward = 0.0
         dmg_dealt = dmg_taken = 0.0
         terminated = truncated = False
@@ -299,6 +414,12 @@ class FightEnv(gym.Env):
         for ctrl in agent_ctrls:
             if self.opponent is not None:
                 opp_ctrl = self.opponent.act(opp_obs, self._info(), self.state)
+                index = getattr(self.opponent, "last_action", None)
+                if index is not None and index != self._opp_action:
+                    self._opp_action = int(index)
+                    self._opp_hist = self._push_history(
+                        self._opp_hist, int(index), self._opponent_view()
+                    )
             else:
                 opp_ctrl = ControllerState()
             self.backend.step([ctrl, opp_ctrl])
@@ -347,8 +468,14 @@ class FightEnv(gym.Env):
         if not terminated and not truncated and self.frame_count >= self.max_episode_frames:
             truncated = True
 
+        if self.action_mode != "full" and int(action) in self._weapon_break_indices:
+            # Only damage actually dealt is rewarded, not the motion itself.
+            reward += self.config.reward.get("weapon_break_deal", 0.0) * dmg_dealt
+
         frame = self._preprocess(self.backend.screen())
         self._frames.append(frame)
+        if self.action_mode != "full":
+            self._hist = self._push_history(self._hist, int(action), start_features)
         obs = self._observe()
         info = self._info()
         info.update({"dmg_dealt": dmg_dealt, "dmg_taken": dmg_taken})
@@ -392,23 +519,44 @@ class FightEnv(gym.Env):
         return r, deal, take
 
     # -- observation ---------------------------------------------------- #
-    @staticmethod
-    def _opponent_obs(obs: dict[str, np.ndarray] | None) -> dict[str, np.ndarray] | None:
-        """Mirror the state vector so a P1-trained policy can play as P2."""
+    def _opponent_obs(self, obs: dict[str, np.ndarray] | None) -> dict[str, np.ndarray] | None:
+        """View ``obs`` from the opponent's side; P1 sees the canonical one."""
         if obs is None:
             return None
-        state = obs["state"].copy()
-        state[0], state[1] = state[1], state[0]
-        state[4], state[5] = state[5], state[4]
-        state[2] = -state[2]
-        state[7] = -state[7]
-        return {"pixels": obs["pixels"], "state": state}
+        state = obs["state"] if self.opponent_side == 1 else _mirror_state(obs["state"])
+        return {"pixels": obs["pixels"], "state": state, "history": self._opp_hist}
+
+    def _opponent_view(self) -> np.ndarray:
+        """Current state features, oriented the way the opponent sees them."""
+        features = self.state.features(12)
+        return features if self.opponent_side == 1 else _mirror_state(features)
+
+    def _push_history(
+        self, history: np.ndarray, action: int, start_features: np.ndarray
+    ) -> np.ndarray:
+        """Slide the decision/state history left and append this decision."""
+        n_actions = int(self.action_space.n) if self.action_mode != "full" else 0
+        if n_actions <= 0:
+            return history
+        updated = np.zeros_like(history)
+        updated[:12] = start_features
+        updated[12 + n_actions:] = history[12:-n_actions]
+        if 0 <= action < n_actions:
+            updated[12 + action] = 1.0
+        return updated
+
+    def _reset_history(self) -> None:
+        self._hist = np.zeros(self._history_dim, np.float32)
+        self._hist[:12] = self.state.features(12)
+        self._opp_hist = np.zeros(self._history_dim, np.float32)
+        self._opp_hist[:12] = self._opponent_view()
+        self._opp_action = None
 
     def _observe(self) -> dict[str, np.ndarray]:
         pixels = np.stack(self._frames, axis=0) if self._frames else np.zeros(
             (self.frame_stack, *self.obs_size), np.uint8
         )
-        obs = {"pixels": pixels, "state": self.state.features(12)}
+        obs = {"pixels": pixels, "state": self.state.features(12), "history": self._hist}
         self._last_obs = obs
         return obs
 

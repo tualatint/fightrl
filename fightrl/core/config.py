@@ -23,6 +23,7 @@ DEFAULT_REWARD = {
     "time": 0.002,     # per-second penalty (discourage stalling)
     "lead": 0.25,      # potential-based shaping on the health lead
     "approach": 0.6,   # reward per fraction of the stage closed
+    "weapon_break_deal": 0.0,  # extra multiplier on damage dealt by a weapon-break
 }
 
 # libretro joypad button ids (RETRO_DEVICE_ID_JOYPAD_*).
@@ -81,6 +82,8 @@ class GameConfig:
     macros: list[Macro] = field(default_factory=list)
     action_mode: str | None = None
     primitive_buttons: list[tuple[str, ...]] | None = None
+    primitive_actions: list[dict[str, object]] | None = None
+    weapon_break: list[str] = field(default_factory=list)
     frameskip: int = 4
     state_source: str = "auto"
     ram_map: RamMap | None = None
@@ -108,7 +111,14 @@ class GameConfig:
     @property
     def n_primitives(self) -> int:
         """Size of the raw-input half of a hybrid action space."""
+        if self.primitive_actions is not None:
+            return len(self.primitive_actions)
         return len(DIRECTIONS) * len(self.primitive_button_sets())
+
+    @property
+    def hybrid_action_count(self) -> int:
+        """Number of hybrid actions; a curated primitive list needs no empty slot."""
+        return self.n_primitives + len(self.macros) + (0 if self.primitive_actions is not None else 1)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GameConfig":
@@ -132,6 +142,28 @@ class GameConfig:
                 raise ValueError(
                     f"{data['id']}: primitive_buttons has unknown buttons {sorted(unknown)}"
                 )
+        primitive_actions = None
+        if data.get("primitive_actions") is not None:
+            primitive_actions = []
+            for entry in data["primitive_actions"]:
+                direction = str(entry.get("dir", "neutral"))
+                if direction not in DIRECTIONS:
+                    raise ValueError(
+                        f"{data['id']}: primitive_actions has unknown direction {direction!r}"
+                    )
+                buttons = tuple(str(b) for b in entry.get("buttons", ()))
+                unknown = set(buttons) - set(action_buttons)
+                if unknown:
+                    raise ValueError(
+                        f"{data['id']}: primitive_actions has unknown buttons {sorted(unknown)}"
+                    )
+                frames = entry.get("frames")
+                primitive_actions.append({
+                    "dir": direction,
+                    "buttons": buttons,
+                    "frames": int(frames) if frames is not None else None,
+                    "name": str(entry.get("name") or ""),
+                })
         action_mode = data.get("action_mode")
         if action_mode is not None and action_mode not in ("macro", "full", "hybrid"):
             raise ValueError(f"{data['id']}: unknown action_mode {action_mode!r}")
@@ -153,6 +185,7 @@ class GameConfig:
             macros=macros,
             action_mode=action_mode,
             primitive_buttons=primitive_buttons,
+            primitive_actions=primitive_actions,
             frameskip=int(data.get("frameskip", 4)),
             state_source=str(data.get("state_source", "auto")),
             ram_map=ram_map,
@@ -161,6 +194,7 @@ class GameConfig:
                     "height": int(data.get("screen", {}).get("height", 224))},
             max_episode_frames=int(data.get("max_episode_frames", 60 * 100)),
             reward=reward,
+            weapon_break=[str(n) for n in data.get("weapon_break", ())],
             mock=dict(data.get("mock", {})),
             source_path=data.get("source_path"),
         )
