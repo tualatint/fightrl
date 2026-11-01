@@ -104,14 +104,26 @@ class Session:
         }
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
+        self._next_frame = time.perf_counter()
 
     def _on_frame(self, frame: np.ndarray) -> None:
+        """Pace every emulated frame to 60 fps so motion is smooth.
+
+        env.step() runs a whole macro as one call; pacing here (inside the
+        frame callback) keeps frames evenly spaced instead of bursting them
+        and then sleeping.
+        """
+        now = time.perf_counter()
+        delay = self._next_frame - now
+        if delay > 0:
+            time.sleep(delay)
+        else:
+            self._next_frame = now
+        self._next_frame += 1.0 / 60.0
         self.frame_count += 1
-        if self.frame_count % 2:
-            return
-        image = Image.fromarray(frame).resize((640, 448), Image.NEAREST)
+        image = Image.fromarray(frame).resize((480, 336), Image.NEAREST)
         buffer = __import__("io").BytesIO()
-        image.save(buffer, format="JPEG", quality=80)
+        image.save(buffer, format="JPEG", quality=72)
         with self.jpeg_lock:
             self.jpeg = buffer.getvalue()
 
@@ -121,6 +133,7 @@ class Session:
             f"checkpoint:{self.paths[p2_key]}", config=self.env.config, env=self.env
         )
         self.status.update({"phase": "fight", "winner": None, "p1": p1_key, "p2": p2_key})
+        self._next_frame = time.perf_counter() + 0.05
         return self.env.reset(seed=self.seed + self.series["a"] + self.series["b"])
 
     def start(self) -> None:
@@ -129,10 +142,8 @@ class Session:
     def _run(self) -> None:
         try:
             obs, _ = self._start_match()
-            next_step = time.perf_counter()
             while not self.stop.is_set():
                 model = self.models[self.status["p1"]]
-                start_frame = self.env.frame_count
                 action, _ = model.predict(obs, deterministic=True)
                 obs, _, terminated, truncated, info = self.env.step(action)
                 self.status.update({
@@ -152,17 +163,7 @@ class Session:
                         break
                     self.swapped = not self.swapped
                     obs, _ = self._start_match()
-                    next_step = time.perf_counter()
                     continue
-                # Pace by emulated frames: macros consume many frames, so a
-                # fixed sleep per step would speed long moves up.
-                advanced = max(self.env.frame_count - start_frame, 1)
-                next_step += advanced / 60.0
-                delay = next_step - time.perf_counter()
-                if delay > 0:
-                    time.sleep(delay)
-                else:
-                    next_step = time.perf_counter()
         finally:
             self.stop.set()
             if self.env.on_frame == self._on_frame:
@@ -236,7 +237,7 @@ def stream(session: int = 0) -> StreamingResponse:
             if jpeg:
                 yield (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
                        + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n")
-            time.sleep(1 / 30)
+            time.sleep(1 / 60)
     return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
