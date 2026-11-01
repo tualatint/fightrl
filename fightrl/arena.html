@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FightRL Arena — Samurai Shodown II</title>
+<style>
+  :root {
+    --bg:#08090d; --panel:#11131a; --line:#232733; --text:#e9ecf4; --muted:#8790a3;
+    --p1:#4fd1ff; --p2:#ff5f9e; --gold:#ffd166;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--text);font-family:Inter,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(900px 500px at 15% -10%,#14263a 0,transparent 60%),
+               radial-gradient(900px 500px at 85% 0,#2a1226 0,transparent 55%),var(--bg)}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 20px 40px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:22px;letter-spacing:.18em;text-transform:uppercase;margin:0}
+  h1 span{color:var(--gold)}
+  .sub{color:var(--muted);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+  .lobby{display:grid;grid-template-columns:1fr 60px 1fr;gap:16px;margin-top:22px;align-items:stretch}
+  .card{background:linear-gradient(180deg,#ffffff0a,#ffffff03);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
+  .card.a{--accent:var(--p1)} .card.b{--accent:var(--p2)}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .tag{font-size:11px;letter-spacing:.14em;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.live{color:var(--accent);border-color:var(--accent);box-shadow:0 0 12px -2px var(--accent)}
+  .score{font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;color:var(--accent)}
+  select{width:100%;background:#0c0e14;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13px;outline:none}
+  select:focus{border-color:#3d4560}
+  .meta{margin-top:9px;color:var(--muted);font-size:11.5px;min-height:15px}
+  .vs{display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:var(--muted);letter-spacing:.12em}
+  .stage-shell{margin-top:22px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#05060a}
+  .hud{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:#080a10d9}
+  .hp{flex:1;height:12px;border-radius:999px;background:#1a1e28;overflow:hidden}
+  .hp.right{transform:scaleX(-1)}
+  .fill{height:100%;width:100%;border-radius:999px;transition:width .12s linear}
+  .hp.a .fill{background:linear-gradient(90deg,#2be0a0,#7bffcf)}
+  .hp.b .fill{background:linear-gradient(90deg,#ff4d8d,#ffa3c4)}
+  .hud .name{font-size:12px;letter-spacing:.06em;color:var(--muted);min-width:130px}
+  .hud .name.right{text-align:right}
+  .stage{position:relative;aspect-ratio:320/224;background:repeating-linear-gradient(0deg,#ffffff08 0 1px,transparent 1px 3px),
+      radial-gradient(circle at 50% 30%,#131a26,#05060a 70%)}
+  #screen{width:100%;height:100%;display:block;object-fit:contain;image-rendering:pixelated}
+  .placeholder{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+  .banner{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) scale(.96);padding:10px 22px;border-radius:10px;
+      background:#05060ad9;border:1px solid #ffffff24;font-weight:800;letter-spacing:.16em;text-transform:uppercase;text-align:center;
+      opacity:0;transition:.18s;pointer-events:none;backdrop-filter:blur(3px)}
+  .banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  .banner small{display:block;margin-top:5px;font-size:10px;color:var(--muted);letter-spacing:.14em}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:14px 16px;border-top:1px solid var(--line);background:#080a10b3}
+  button{border:1px solid var(--line);background:#151924;color:var(--text);padding:10px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+  button:hover{border-color:#3b4357;background:#1a1f2c}
+  button.primary{background:linear-gradient(180deg,#2fd0ff,#1aa7d8);color:#03121b;border-color:#59dcff}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .status{margin-left:auto;font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:50%;background:#4a5060}
+  .dot.live{background:#2be0a0;box-shadow:0 0 10px #2be0a0}
+  footer{margin-top:18px;color:var(--muted);font-size:11.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  @media(max-width:760px){.lobby{grid-template-columns:1fr}.vs{padding:4px 0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fight<span>RL</span> Arena</h1>
+      <div class="sub">Samurai Shodown II · checkpoints fight live</div>
+    </div>
+    <div class="sub">engine: fbneo · vision hp</div>
+  </header>
+
+  <section class="lobby">
+    <div class="card a">
+      <div class="head">
+        <div class="tag" id="tagA">P1</div>
+        <div class="score" id="scoreA">0</div>
+      </div>
+      <select id="selA"></select>
+      <div class="meta" id="metaA"></div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="card b">
+      <div class="head">
+        <div class="tag" id="tagB">P2</div>
+        <div class="score" id="scoreB">0</div>
+      </div>
+      <select id="selB"></select>
+      <div class="meta" id="metaB"></div>
+    </div>
+  </section>
+
+  <div class="stage-shell">
+    <div class="hud">
+      <div class="name" id="nameL">—</div>
+      <div class="hp a"><div class="fill" id="hpA"></div></div>
+      <div class="hp b right"><div class="fill" id="hpB"></div></div>
+      <div class="name right" id="nameR">—</div>
+    </div>
+    <div class="stage">
+      <img id="screen" alt="live fight" />
+      <div class="placeholder" id="placeholder">pick two checkpoints and press start</div>
+      <div class="banner" id="banner"></div>
+    </div>
+    <div class="controls">
+      <button class="primary" id="start">Start fight</button>
+      <button class="ghost" id="swap">Swap sides</button>
+      <button class="ghost" id="stop" disabled>Stop</button>
+      <div class="status"><span class="dot" id="dot"></span><span id="phase">idle</span></div>
+    </div>
+  </div>
+
+  <footer>
+    <span>sides alternate every match · both policies play P1 and P2</span>
+    <span id="frames">frame 0</span>
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let session = null, models = [], polling = null;
+const img = $("screen");
+
+function labelOf(path) {
+  const item = models.find((m) => m.id === path);
+  return item ? item.label.split(" · ")[0] : path.split("/").pop();
+}
+function metaOf(path) {
+  const item = models.find((m) => m.id === path);
+  return item ? item.steps.toLocaleString() + " training steps" : "";
+}
+
+async function loadModels() {
+  const res = await fetch("/api/models");
+  models = (await res.json()).models;
+  for (const sel of [$("selA"), $("selB")]) {
+    sel.innerHTML = models.map((m) => `<option value="${m.id}">${m.label}</option>`).join("");
+  }
+  if (models.length > 1) $("selB").selectedIndex = 1;
+  refreshMeta();
+}
+function refreshMeta() {
+  $("metaA").textContent = metaOf($("selA").value);
+  $("metaB").textContent = metaOf($("selB").value);
+}
+
+async function startFight() {
+  const body = { p1: $("selA").value, p2: $("selB").value };
+  const res = await fetch("/api/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) { $("phase").textContent = "error: " + (await res.json()).detail; return; }
+  const data = await res.json();
+  session = data.session;
+  img.src = `/stream?session=${session}&t=${Date.now()}`;
+  $("placeholder").style.display = "none";
+  $("stop").disabled = false;
+  $("start").disabled = true;
+  if (!polling) polling = setInterval(poll, 150);
+}
+async function stopFight() {
+  await fetch("/api/stop", { method: "POST" });
+  session = null; img.src = "";
+  $("placeholder").style.display = "grid";
+  $("placeholder").textContent = "stopped";
+  $("stop").disabled = true; $("start").disabled = false;
+  $("phase").textContent = "idle"; $("dot").classList.remove("live");
+  $("banner").classList.remove("show");
+}
+function swapSides() {
+  const a = $("selA").selectedIndex; $("selA").selectedIndex = $("selB").selectedIndex; $("selB").selectedIndex = a;
+  refreshMeta();
+}
+async function poll() {
+  if (!session) return;
+  const data = await (await fetch("/api/status")).json();
+  if (!data.active || data.session !== session) return;
+  $("hpA").style.width = (data.hp1 * 100).toFixed(1) + "%";
+  $("hpB").style.width = (data.hp2 * 100).toFixed(1) + "%";
+  $("phase").textContent = data.phase;
+  $("dot").classList.toggle("live", data.phase === "fight");
+  $("frames").textContent = "frame " + (data.frames || 0).toLocaleString();
+  const p1 = data.p1 === "a" ? $("selA").value : $("selB").value;
+  const p2 = data.p2 === "a" ? $("selA").value : $("selB").value;
+  $("nameL").textContent = labelOf(p1); $("nameR").textContent = labelOf(p2);
+  $("tagA").classList.toggle("live", data.p1 === "a"); $("tagB").classList.toggle("live", data.p1 === "b");
+  $("scoreA").textContent = data.series.a; $("scoreB").textContent = data.series.b;
+  const banner = $("banner");
+  if (data.winner) {
+    const key = data.winner === "a" ? $("selA").value : $("selB").value;
+    banner.innerHTML = `${labelOf(key)} wins<small>next match starts soon · sides swap</small>`;
+    banner.classList.add("show");
+  } else {
+    banner.classList.remove("show");
+  }
+}
+
+$("start").onclick = startFight;
+$("stop").onclick = stopFight;
+$("swap").onclick = swapSides;
+$("selA").onchange = refreshMeta; $("selB").onchange = refreshMeta;
+loadModels();
+</script>
+</body>
+</html>
